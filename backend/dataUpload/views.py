@@ -208,153 +208,6 @@ class CSVUploadPreviewView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-"""
-class CSVUploadPreviewView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        csv_file = request.FILES.get('file')
-
-        if not csv_file or not csv_file.name.endswith('.csv'):
-            return Response({"error": "Invalid file format. Please upload a CSV file."}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            csv_data = pd.read_csv(csv_file)
-
-            csv_data = csv_data.where(pd.notnull(csv_data), 0.0)
-            print(csv_data)
-            preview_data = []
-
-            for record in csv_data.to_dict(orient="records"):
-                vendor_name = record.get('vendorName', '')
-                category = categorize_transactions(vendor_name)
-
-                all_categories = Category.objects.values_list('name', flat=True)
-
-                preview_data.append({
-                    "transactionDate": record.get('transactionDate'),
-                    "vendorName": vendor_name,
-                    "debit": record.get('debit'),
-                    "credit": record.get('credit'),
-                    "suggestedCategory": category,
-                    "allCategories": list(all_categories),
-                })
-
-            return Response({"preview": preview_data}, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-"""        
-
-"""
-@api_view(['POST'])
-def save_statements(request):
-    user = request.user
-    statements = request.data.get('statements', [])
-
-    try:
-        for statement in statements:
-            transaction_date = statement.get('transactionDate')
-            vendor_name = statement.get('vendorName')
-            debit = statement.get('debit')
-            credit = statement.get('credit')
-            category_name = statement.get('category')
-
-            # Save the keyword in the Category table if it doesn't exist
-            category, created = Category.objects.get_or_create(name=category_name)
-            category.keywords.add(vendor_name)
-
-            # Save the statement to the database
-            CSVData.objects.create(
-                user=user,
-                transactionDate=transaction_date,
-                vendorName=vendor_name,
-                debit=debit,
-                credit=credit,
-                category=category
-            )
-
-        return Response({"success": "Statements saved successfully!"}, status=status.HTTP_201_CREATED)
-
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-"""
-
-
-
-'''
-@api_view(['POST'])
-def save_statements(request):
-    user = request.user
-    data = request.data.get('data', [])  # Fetch the data list
-    print(data)
-
-    if not data:
-        return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
-
-    new_records = []  # For bulk creation of new records
-
-    try:
-        for row in data:
-            vendor_name = row.get('vendorName')
-            debit = row.get('debit', 0.0)
-            credit = row.get('credit', 0.0)
-            category_name = row.get('category', 'Uncategorized')
-            keyword = row.get('keyword', None)
-
-            # Validate required fields
-            if not vendor_name:
-                return Response(
-                    {"error": "Vendor name is required for all rows."},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
-            # Get or create the category
-            #category, _ = Category.objects.get_or_create(name=category_name)
-            # Ensure only an existing category is selected
-            #try:
-            print(category_name)
-            category = Category.objects.get(name=category_name)
-            #except Category.DoesNotExist:
-            #    raise ValidationError(f"The category '{category_name}' does not exist.")
-
-            # Add keyword if provided and not already associated with the category
-            #if keyword and not Keyword.objects.filter(category=category, word=keyword).exists():
-            #    Keyword.objects.create(category=category, word=keyword)
-            if keyword:
-                # Use get_or_create to avoid duplicate entries
-                Keyword.objects.get_or_create(category=category, word=keyword)
-
-
-            # Check for existing records to avoid duplicates
-            exists = CSVData.objects.filter(
-                user=user,
-                vendorName=vendor_name,
-                debit=debit,
-                credit=credit,
-                category=category.name,
-            ).exists()
-
-            if not exists:
-                new_records.append(CSVData(
-                    user=user,
-                    vendorName=vendor_name,
-                    debit=debit,
-                    credit=credit,
-                    category=category.name
-                ))
-
-        # Bulk create all new records
-        if new_records:
-            CSVData.objects.bulk_create(new_records)
-
-        return Response({"message": "Statements saved successfully!"}, status=status.HTTP_201_CREATED)
-
-    except Exception as e:
-        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-'''
-
 @api_view(['POST'])
 def save_statements(request):
     user = request.user
@@ -468,3 +321,29 @@ class CategoryView(APIView):
 
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class UserCategoriesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+
+        user = request.user
+
+        user_categories = Category.objects.filter(user=user)
+        user_serializer = CategorySerializer(user_categories, many=True)
+
+        default_categories = [
+            {"id": None, "name": "Grocery"},
+            {"id": None, "name": "Dining Out"},
+            {"id": None, "name": "Healthcare"},
+            {"id": None, "name": "Entertainment"},
+            {"id": None, "name": "Home"},
+        ]
+
+        if not user_categories.exists():
+            response_data = default_categories
+        else:
+            response_data = user_serializer.data
+
+        return Response(response_data)

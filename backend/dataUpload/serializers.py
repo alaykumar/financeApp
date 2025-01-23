@@ -15,8 +15,8 @@ class CSVDataSerializer(serializers.ModelSerializer):
         return data
 
 class CategorySerializer(serializers.ModelSerializer):
-    keywords = serializers.StringRelatedField(many=True)
+    #keywords = serializers.StringRelatedField(many=True)
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'keywords']
+        fields = ['id', 'name']
