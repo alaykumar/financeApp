@@ -87,6 +87,20 @@ function UploadCSV() {
     setCsvData(updatedData);
   };
 
+  const handleAddCustomCategory = (index) => {
+    const updatedData = [...csvData];
+    const customCategory = updatedData[index].customCategory?.trim();
+
+    if (customCategory && !categories.some((cat) => cat.name === customCategory)) {
+      setCategories((prevCategories) => [...prevCategories, { id: `custom-${Date.now()}`, name: customCategory }]);
+    }
+
+    // Save the finalized custom category to the entry's `category`
+    updatedData[index].category = customCategory;
+    updatedData[index].customCategory = ''; // Clear the input field
+    setCsvData(updatedData);
+  };
+
   const handleSave = async () => {
     const cleanedData = csvData.map(({ suggestedCategory, allCategories, ...rest }) => rest);
 
@@ -155,12 +169,15 @@ function UploadCSV() {
                             <option value="Other">Other</option>
                           </select>
                           {item.category === 'Other' && (
-                            <input
-                              type="text"
-                              placeholder="Enter custom category"
-                              value={item.customCategory || ''}
-                              onChange={(e) => handleCustomCategoryChange(index, e.target.value)}
-                            />
+                            <div>
+                              <input
+                                type="text"
+                                placeholder="Enter custom category"
+                                value={item.customCategory || ''}
+                                onChange={(e) => handleCustomCategoryChange(index, e.target.value)}
+                              />
+                              <button onClick={() => handleAddCustomCategory(index)}>Add</button>
+                            </div>
                           )}
                         </td>
                       </tr>
