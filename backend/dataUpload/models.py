@@ -47,12 +47,15 @@ class CSVData(models.Model):
     credit = models.DecimalField(default=0, max_digits=7, decimal_places=2)
     balance = models.DecimalField(default=0, max_digits=7, decimal_places=2)
     uploaded_at = models.DateTimeField(auto_now_add=True)
+    category = models.CharField(max_length=255, default="Uncategorized")
 
     # Relate category to CSVData using ForeignKey and include the user
-    category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
+    #category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return f"{self.vendorName} - {self.transactionDate}"
+    
+
 class Category(models.Model):
     # Relate category to a specific user
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)

@@ -207,16 +207,17 @@ class CSVUploadPreviewView(APIView):
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
+"""
 @api_view(['POST'])
 def save_statements(request):
     user = request.user
     data = request.data.get('data', [])  # Fetch the data list
-    print(data)
+    #print(data)
 
     if not data:
         return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
 
+    new_categories = []
     new_records = []  # For bulk creation of new records
 
     try:
@@ -284,6 +285,95 @@ def save_statements(request):
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+"""
+
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+from rest_framework import status
+from datetime import datetime
+from .models import Category, CSVData, Keyword
+from django.db import transaction
+
+@api_view(['POST'])
+def save_statements(request):
+    user = request.user
+    data = request.data.get('data', [])  # Fetch the data list
+
+    if not data:
+        return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    new_categories = []  # To bulk create new categories
+    new_records = []     # To bulk create new CSV data records
+
+    try:
+        with transaction.atomic():  # Ensures all changes are rolled back on failure
+            for row in data:
+                transaction_date = row.get('transactionDate')  # Add transactionDate
+                vendor_name = row.get('vendorName')
+                debit = row.get('debit', 0.0)
+                credit = row.get('credit', 0.0)
+                category_name = row.get('category', 'Uncategorized')
+                keyword = row.get('keyword', None)
+
+                # Validate required fields
+                if not vendor_name or not transaction_date:
+                    return Response(
+                        {"error": "Transaction date and vendor name are required for all rows."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Validate and parse transaction date
+                try:
+                    parsed_date = datetime.strptime(transaction_date, '%Y-%m-%d').date()
+                except ValueError:
+                    return Response(
+                        {"error": f"Invalid date format for {transaction_date}. Use 'YYYY-MM-DD'."},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+                # Get or create the category linked to the user
+                category, created = Category.objects.get_or_create(
+                    name=category_name, user=user
+                )
+
+                if created:
+                    new_categories.append(category)
+
+                # Add keyword if provided and not already associated with the category
+                if keyword:
+                    Keyword.objects.get_or_create(category=category, word=keyword)
+
+                # Check for existing records to avoid duplicates
+                exists = CSVData.objects.filter(
+                    user=user,
+                    transactionDate=parsed_date,
+                    vendorName=vendor_name,
+                    debit=debit,
+                    credit=credit,
+                    category=category.name,
+                ).exists()
+
+                if not exists:
+                    new_records.append(CSVData(
+                        user=user,
+                        transactionDate=parsed_date,
+                        vendorName=vendor_name,
+                        debit=debit,
+                        credit=credit,
+                        category=category.name
+                    ))
+
+            # Bulk create all new CSV data records
+            if new_records:
+                CSVData.objects.bulk_create(new_records)
+
+        return Response(
+            {"message": "Statements and categories saved successfully!"},
+            status=status.HTTP_201_CREATED
+        )
+
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CategoryView(APIView):
