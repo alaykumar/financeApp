@@ -8,7 +8,13 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from .serializers import CSVUploadSerializer, CSVDataSerializer, CategorySerializer
 from .models import CSVData, Category, Keyword
+from django.db import transaction
+
+from .keywordUtils import generate_single_keyword
 from .utils import categorize_transactions
+
+
+
 
 class CSVUploadView(APIView):
     permission_classes = [IsAuthenticated]
@@ -287,12 +293,7 @@ def save_statements(request):
 
 """
 
-from rest_framework.decorators import api_view
-from rest_framework.response import Response
-from rest_framework import status
-from datetime import datetime
-from .models import Category, CSVData, Keyword
-from django.db import transaction
+
 
 @api_view(['POST'])
 def save_statements(request):
@@ -339,9 +340,11 @@ def save_statements(request):
                 if created:
                     new_categories.append(category)
 
+                keyword = generate_single_keyword(vendor_name)
+                #print(keyword)
                 # Add keyword if provided and not already associated with the category
                 if keyword:
-                    Keyword.objects.get_or_create(category=category, word=keyword)
+                    Keyword.objects.get_or_create(user=user, category=category, word=keyword)
 
                 # Check for existing records to avoid duplicates
                 exists = CSVData.objects.filter(
