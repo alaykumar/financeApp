@@ -1,6 +1,6 @@
 import spacy
 from spacy.matcher import Matcher
-from .models import Category, Keyword  # Adjust import to your app structure
+from .models import Category, Keyword  
 
 # Load the spaCy language model
 nlp = spacy.load("en_core_web_sm")
