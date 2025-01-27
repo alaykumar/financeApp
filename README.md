@@ -11,7 +11,7 @@ This app helps users visualize their spending patterns and provides personalized
 
 ## Tech Stack
 - **Backend**: Python, Django, Django Rest Framework (DRF), PostgreSQL
-- **Frontend**: React.js, Axios, TailwindCSS/Bootstrap
+- **Frontend**: React.js, Axios, CSS, Bootstrap
 - **Others**: Docker, Docker Compose for containerized deployment
 
 
