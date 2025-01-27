@@ -12,7 +12,7 @@ function Homepage() {
         </div>
       </main>
       <footer style={{ textAlign: 'center', marginTop: 50 }}>
-        <p>© Company 2024</p>
+        <p>© FinApp 2024</p>
       </footer>
     </div>
   );
