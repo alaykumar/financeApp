@@ -49,9 +49,6 @@ function Registerpage() {
                               className="fas fa-cubes fa-2x me-3"
                               style={{ color: "#ff6219" }}
                             />
-                            <span className="h2 fw-bold mb-0">
-                              Welcome to <b>Desphixs👋</b>
-                            </span>
                           </div>
                           <h5
                             className="fw-normal mb-3 pb-3"
@@ -130,18 +127,7 @@ function Registerpage() {
             </div>
           </div>
         </section>
-        <footer className="bg-light text-center text-lg-start">
-          {/* Copyright */}
-          <div
-            className="text-center p-3"
-            style={{ backgroundColor: "rgba(0, 0, 0, 0.2)" }}
-          >
-            © 2019 - till date Copyright:
-            <a className="text-dark" href="https://mdbootstrap.com/">
-              desphixs.com
-            </a>
-          </div>
-          {/* Copyright */}
+        <footer>
         </footer>
     </>
 
