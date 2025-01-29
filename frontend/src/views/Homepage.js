@@ -6,13 +6,14 @@ function Homepage() {
       <main role="main" style={{ marginTop: 50, textAlign: 'center' }}>
         <div className="container">
           <h1>Welcome!</h1>
+          <p>This is a simple, clean homepage to get you started.</p>
           <a className="btn btn-primary" href="#" role="button">
             Learn More
           </a>
         </div>
       </main>
       <footer style={{ textAlign: 'center', marginTop: 50 }}>
-        <p>© FinApp 2024</p>
+        <p>© Company 2024</p>
       </footer>
     </div>
   );
