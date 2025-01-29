@@ -6,14 +6,14 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
+from rest_framework.pagination import PageNumberPagination
 from .serializers import CSVUploadSerializer, CSVDataSerializer, CategorySerializer
 from .models import CSVData, Category, Keyword
 from django.db import transaction
 
-from .keywordUtils import generate_single_keyword
+
+from .keywordUtils import generate_multiple_keywords#, categorize_transactions
 from .utils import categorize_transactions
-
-
 
 
 class CSVUploadView(APIView):
@@ -131,17 +131,32 @@ class CSVUploadView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+class CustomPagination(PageNumberPagination):
+    page_size = 20  # Set the page size to 20
+    page_size_query_param = 'page_size'  # Optional: Allows the client to change page size
+    max_page_size = 100  # Optional: Limit the maximum page size
+
 @api_view(['GET'])
 def get_statements(request):
     user = request.user
     statements = CSVData.objects.filter(user=user)
-    serialzer = CSVDataSerializer(statements, many=True)
-    return Response(serialzer.data)
+    
+    # Initialize pagination
+    paginator = CustomPagination()
+    result_page = paginator.paginate_queryset(statements, request)
+    
+    # Serialize the paginated data
+    serializer = CSVDataSerializer(result_page, many=True)
+    
+    # Return paginated response
+    return paginator.get_paginated_response(serializer.data)
+
 
 class CSVUploadPreviewView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
+        user = request.user  # Get the current user
         csv_file = request.FILES.get('file')
         card_org = request.data.get('cardOrg')
 
@@ -166,7 +181,8 @@ class CSVUploadPreviewView(APIView):
                     debit = record[csv_data.columns[2]]
                     credit = record[csv_data.columns[3]]
 
-                    category = categorize_transactions(vendor_name)
+                    # Call the categorize_transactions function with the user
+                    category = categorize_transactions(vendor_name, user)
                     all_categories = Category.objects.values_list('name', flat=True)
 
                     preview_data.append({
@@ -196,7 +212,8 @@ class CSVUploadPreviewView(APIView):
                         credit = abs(amount)
                         debit = 0.0
 
-                    category = categorize_transactions(vendor_name)
+                    # Call the categorize_transactions function with the user
+                    category = categorize_transactions(vendor_name, user)
                     all_categories = Category.objects.values_list('name', flat=True)
 
                     preview_data.append({
@@ -214,58 +231,52 @@ class CSVUploadPreviewView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 @api_view(['POST'])
 def save_statements(request):
     user = request.user
-    data = request.data.get('data', [])  # Fetch the data list
+    data = request.data.get('data', [])  
 
     if not data:
         return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-    new_categories = []  # To bulk create new categories
-    new_records = []     # To bulk create new CSV data records
+    new_categories = []  
+    new_records = []     
 
     try:
-        with transaction.atomic():  # Ensures all changes are rolled back on failure
+        with transaction.atomic():  
             for row in data:
-                transaction_date = row.get('transactionDate')  # Add transactionDate
+                transaction_date = row.get('transactionDate')  
                 vendor_name = row.get('vendorName')
                 debit = row.get('debit', 0.0)
                 credit = row.get('credit', 0.0)
                 category_name = row.get('category', 'Uncategorized')
-                keyword = row.get('keyword', None)
 
-                # Validate required fields
                 if not vendor_name or not transaction_date:
-                    return Response(
-                        {"error": "Transaction date and vendor name are required for all rows."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    return Response({"error": "Transaction date and vendor name are required."},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
-                # Validate and parse transaction date
                 try:
                     parsed_date = datetime.strptime(transaction_date, '%Y-%m-%d').date()
                 except ValueError:
-                    return Response(
-                        {"error": f"Invalid date format for {transaction_date}. Use 'YYYY-MM-DD'."},
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
+                    return Response({"error": f"Invalid date format: {transaction_date}. Use 'YYYY-MM-DD'."},
+                                    status=status.HTTP_400_BAD_REQUEST)
 
-                # Get or create the category linked to the user
-                category, created = Category.objects.get_or_create(
-                    name=category_name, user=user
-                )
-
+                category, created = Category.objects.get_or_create(name=category_name, user=user)
                 if created:
                     new_categories.append(category)
 
-                keyword = generate_single_keyword(vendor_name)
-                #print(keyword)
-                # Add keyword if provided and not already associated with the category
-                if keyword:
-                    Keyword.objects.get_or_create(user=user, category=category, word=keyword)
+                # Generate and ensure unique keywords
+                keywords = generate_multiple_keywords(vendor_name)
 
-                # Check for existing records to avoid duplicates
+                for keyword in keywords:
+                    Keyword.objects.get_or_create(
+                        user=user,
+                        category=category,
+                        words=keyword,
+                        vendor_name=vendor_name  #  Save vendor_name along with keyword
+                    )
+
                 exists = CSVData.objects.filter(
                     user=user,
                     transactionDate=parsed_date,
@@ -285,14 +296,12 @@ def save_statements(request):
                         category=category.name
                     ))
 
-            # Bulk create all new CSV data records
+            # Bulk create CSVData entries
             if new_records:
                 CSVData.objects.bulk_create(new_records)
 
-        return Response(
-            {"message": "Statements and categories saved successfully!"},
-            status=status.HTTP_201_CREATED
-        )
+        return Response({"message": "Statements, categories, and keywords saved successfully!"},
+                        status=status.HTTP_201_CREATED)
 
     except Exception as e:
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

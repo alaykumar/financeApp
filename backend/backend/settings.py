@@ -38,13 +38,15 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
-    'django.contrib.staticfiles',
+    'django.contrib.staticfiles',  
+    'django.contrib.postgres',
     'api',
     'rest_framework',
     'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'dataUpload',
 ]
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -94,6 +96,14 @@ DATABASES = {
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT'),
     }
+    #'default': {
+    #    'ENGINE': 'django.db.backends.postgresql_psycopg2',
+    #    'NAME': 'financeApp',
+    #    'USER': 'postgres',
+    #    'PASSWORD': 'admin',
+    #    'HOST': 'localhost',
+    #    'PORT': '5432',
+    #}
 }
 
 
@@ -181,7 +191,7 @@ SIMPLE_JWT = {
 CORS_ORIGIN_ALLOW_ALL = True
 #CORS_ALLOWED_ORIGINS = [
 #    "http://localhost:3000",
-#    "http://localhost:8000",  
+#    "http://localhost:8000",  # add your backend's IP if needed
 #]
 
 AUTH_USER_MODEL = 'api.User'
