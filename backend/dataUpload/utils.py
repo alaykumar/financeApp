@@ -16,7 +16,8 @@ def load_categories_to_matcher():
             pattern = [{"LOWER": keyword.words.lower()}]  # Use lowercase matching
             matcher.add(category.name, [pattern])
 
-# Categorization function
+
+
 def categorize_transactions(vendor_name, user):
     # Ensure matcher is updated
     load_categories_to_matcher()
@@ -32,12 +33,21 @@ def categorize_transactions(vendor_name, user):
 
     doc = nlp(vendor_name.lower())  # Preprocess vendor name
     matches = matcher(doc)  # Match vendor name against patterns
-    
+
     if matches:
-        match_id, start, end = matches[0]  # Use the first match
-        category_name = nlp.vocab.strings[match_id]  # Retrieve category name
-        return category_name
+        # Create a list of all matches with their respective categories
+        match_results = []
+        for match_id, start, end in matches:
+            category_name = nlp.vocab.strings[match_id]  # Retrieve category name
+            match_results.append({
+                'category_name': category_name,
+                'match_length': end - start  # Measure the length of the match for ranking
+            })
+        
+        # Sort matches by match length in descending order to prioritize longer, more relevant matches
+        match_results.sort(key=lambda x: x['match_length'], reverse=True)
+
+        # Return the category with the longest match (most relevant)
+        return match_results[0]['category_name']
     else:
         return "Uncategorized"
-
-

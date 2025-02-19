@@ -48,3 +48,34 @@ class Keyword(models.Model):
 
 
 
+"""
+class Keyword(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, default="")  # Ensure this field is required
+    category = models.ForeignKey(Category, related_name="keywords", on_delete=models.CASCADE, null=False)  # Ensure this field is required
+
+    words = models.TextField(default='')
+    vendor_name = models.CharField(max_length=255, null=False, default="unknown_vendor")  
+
+    #class Meta:
+    #    unique_together = ("user", "vendor_name", "words")
+
+    def __str__(self):
+        return self.words
+
+"""
+
+"""
+class Keyword(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, default='')  # Ensure this field is required
+    category = models.ForeignKey(Category, related_name='keywords', on_delete=models.CASCADE, null=False)  # Ensure this field is required
+    
+    word = models.CharField(max_length=255, null=False, default='')  # Default to an empty string
+    
+
+    class Meta:
+        unique_together = ('user', 'word', 'category')
+
+    def __str__(self):
+        return self.word
+
+"""

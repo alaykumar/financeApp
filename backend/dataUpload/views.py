@@ -1,5 +1,9 @@
 import pandas as pd
 from datetime import datetime
+import logging
+
+from django.db import transaction
+
 from rest_framework import status, generics
 from rest_framework.decorators import api_view
 from rest_framework.views import APIView
@@ -7,128 +11,15 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
+
 from .serializers import CSVUploadSerializer, CSVDataSerializer, CategorySerializer
 from .models import CSVData, Category, Keyword
-from django.db import transaction
-
-
-from .keywordUtils import generate_multiple_keywords#, categorize_transactions
+from .keywordUtils import generate_multiple_keywords
 from .utils import categorize_transactions
 
 
-class CSVUploadView(APIView):
-    permission_classes = [IsAuthenticated]
+logger = logging.getLogger(__name__)
 
-    def post(self, request, *args, **kwargs):
-        serializer = CSVUploadSerializer(data=request.data)
-        if serializer.is_valid():
-            csv_file = serializer.validated_data['file']
-            card_org = request.data['cardOrg']
-            
-
-            if not csv_file.name.endswith('.csv'):
-                return Response({"error": "File is not a CSV"}, status=status.HTTP_400_BAD_REQUEST)
-            
-            user = request.user
-
-            try:
-                if card_org == 'TD':
-                    # Read CSV data into a pandas DataFrame
-                    csv_data = pd.read_csv(csv_file)
-
-                    # Replace NaN with 0.0
-                    csv_data = csv_data.where(pd.notnull(csv_data), 0.0)
-
-                    # Convert and format the dates
-                    for transaction_date in range(csv_data.iloc[:, 0].size):
-                        d = datetime.strptime(csv_data.iloc[transaction_date, 0], '%m/%d/%Y')
-                        csv_data.iloc[transaction_date, 0] = d.strftime('%Y-%m-%d')
-
-                    # Create or update CSVData objects
-                    for record in csv_data.to_dict(orient="records"):
-                        transaction_date = record[csv_data.columns[0]]
-                        vendor_name = record[csv_data.columns[1]]
-                        debit = record[csv_data.columns[2]]
-                        credit = record[csv_data.columns[3]]
-                        #balance = record[csv_data.columns[4]]
-
-                        category = categorize_transactions(vendor_name)
-
-                        # Check if the record already exists
-                        if not CSVData.objects.filter(
-                            user=user,
-                            transactionDate=transaction_date,
-                            vendorName=vendor_name,
-                            debit=debit,
-                            credit=credit,
-                            #balance=balance
-                        ).exists():
-                            CSVData.objects.create(
-                                user=user,
-                                transactionDate=transaction_date,
-                                vendorName=vendor_name,
-                                debit=debit,
-                                credit=credit,
-                                #balance=balance,
-                                category=category
-                            )
-
-                    return Response({"success": "TD statement processed successfully!"}, status=status.HTTP_200_OK)
-                
-                elif card_org == 'AMEX':
-                    # Read CSV data into a pandas DataFrame
-                    csv_data = pd.read_csv(csv_file)
-                    
-                    # Replace NaN with 0.0
-                    csv_data = csv_data.where(pd.notnull(csv_data), 0.0)
-
-                    # Convert and format the dates
-                    for transaction_date in range(csv_data.iloc[:, 0].size):
-                        d = datetime.strptime(csv_data.iloc[transaction_date, 0], '%d %b %Y')
-                        csv_data.iloc[transaction_date, 0] = d.strftime('%Y-%m-%d')
-                    #print("csv data" + csv_data)
-                    # Create or update CSVData objects
-                    for record in csv_data.to_dict(orient="records"):
-                        transaction_date = record['Date']
-                        vendor_name = record['Description']
-                        amount = record['Amount']
-
-                        if amount >= 0:
-                            debit = amount
-                            credit = 0.0
-                        else:
-                            credit = amount
-                            debit = 0.0
-                        #balance = record[csv_data.columns[4]]
-
-                        category = categorize_transactions(vendor_name)
-
-                        # Check if the record already exists
-                        if not CSVData.objects.filter(
-                            user=user,
-                            transactionDate=transaction_date,
-                            vendorName=vendor_name,
-                            debit=debit,
-                            credit=credit,
-                            #balance=balance
-                        ).exists():
-                            CSVData.objects.create(
-                                user=user,
-                                transactionDate=transaction_date,
-                                vendorName=vendor_name,
-                                debit=debit,
-                                credit=credit,
-                                #balance=balance,
-                                category=category
-                            )
-
-                    return Response({"success": "AMEX statement processed successfully!"}, status=status.HTTP_200_OK)
-
-            except Exception as e:
-                
-                return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class CustomPagination(PageNumberPagination):
@@ -231,51 +122,75 @@ class CSVUploadPreviewView(APIView):
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 @api_view(['POST'])
 def save_statements(request):
     user = request.user
-    data = request.data.get('data', [])  
+    data = request.data.get('data', [])
 
     if not data:
+        logger.error("No data provided in the request.")
         return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
 
-    new_categories = []  
-    new_records = []     
+    new_categories = [] 
+    new_records = [] 
+    new_keywords = []  # Collecting new keywords to avoid duplicates
 
     try:
-        with transaction.atomic():  
+        with transaction.atomic():  # Ensure atomicity of all DB operations
+            logger.info("Starting transaction save process.")
             for row in data:
-                transaction_date = row.get('transactionDate')  
+                transaction_date = row.get('transactionDate') 
                 vendor_name = row.get('vendorName')
                 debit = row.get('debit', 0.0)
                 credit = row.get('credit', 0.0)
-                category_name = row.get('category', 'Uncategorized')
+                category_name = row.get('category', 'Uncategorized')  # Make sure this is set from frontend
 
                 if not vendor_name or not transaction_date:
+                    logger.error(f"Missing vendor name or transaction date for row: {row}")
                     return Response({"error": "Transaction date and vendor name are required."},
                                     status=status.HTTP_400_BAD_REQUEST)
 
                 try:
                     parsed_date = datetime.strptime(transaction_date, '%Y-%m-%d').date()
                 except ValueError:
+                    logger.error(f"Invalid date format for transaction {transaction_date}.")
                     return Response({"error": f"Invalid date format: {transaction_date}. Use 'YYYY-MM-DD'."},
-                                    status=status.HTTP_400_BAD_REQUEST)
+                                     status=status.HTTP_400_BAD_REQUEST)
 
+                logger.info(f"Processing transaction: {vendor_name} on {parsed_date}")
+
+                # Ensure the category is not set to "Uncategorized" unless it's really uncategorized
+                if category_name == "Uncategorized":
+                    logger.info(f"Categorizing transaction with vendor name: {vendor_name}")
+                    category_name = categorize_transactions(vendor_name, user)
+
+                logger.info(f"Assigned category: {category_name}")
+
+                # Create or retrieve the category
                 category, created = Category.objects.get_or_create(name=category_name, user=user)
                 if created:
                     new_categories.append(category)
+                    logger.info(f"New category created: {category_name}")
 
-                # Generate and ensure unique keywords
+                # Generate keywords for the vendor name
                 keywords = generate_multiple_keywords(vendor_name)
 
-                for keyword in keywords:
-                    Keyword.objects.get_or_create(
+                # Check if the keyword already exists for the user and only add unique ones
+                existing_keywords = Keyword.objects.filter(user=user).values_list('words', flat=True)
+                new_keywords_for_user = [
+                    Keyword(
                         user=user,
                         category=category,
                         words=keyword,
-                        vendor_name=vendor_name  #  Save vendor_name along with keyword
+                        vendor_name=vendor_name
                     )
+                    for keyword in keywords if keyword not in existing_keywords
+                ]
+                
+                # Add the new keywords to the list
+                if new_keywords_for_user:
+                    new_keywords.extend(new_keywords_for_user)
+                    logger.info(f"Generated and queued {len(new_keywords_for_user)} new keyword(s).")
 
                 exists = CSVData.objects.filter(
                     user=user,
@@ -293,17 +208,26 @@ def save_statements(request):
                         vendorName=vendor_name,
                         debit=debit,
                         credit=credit,
-                        category=category.name
+                        category=category.name  # Ensure the category is correctly set
                     ))
+                    logger.info(f"New transaction added: {vendor_name}, {parsed_date}, {category_name}")
+
+            # Bulk create new keywords only if there are any
+            if new_keywords:
+                Keyword.objects.bulk_create(new_keywords)
+                logger.info(f"Bulk created {len(new_keywords)} new keywords.")
 
             # Bulk create CSVData entries
             if new_records:
                 CSVData.objects.bulk_create(new_records)
+                logger.info(f"Bulk created {len(new_records)} transaction records.")
 
+        logger.info("Transaction save process completed successfully.")
         return Response({"message": "Statements, categories, and keywords saved successfully!"},
-                        status=status.HTTP_201_CREATED)
+                         status=status.HTTP_201_CREATED)
 
     except Exception as e:
+        logger.error(f"Error occurred while saving transactions: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
