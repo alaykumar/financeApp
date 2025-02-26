@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 
-from .serializers import CSVUploadSerializer, CSVDataSerializer, CategorySerializer
+from .serializers import CSVDataSerializer, CategorySerializer
 from .models import CSVData, Category, Keyword
 from .keywordUtils import generate_multiple_keywords
 from .utils import categorize_transactions
@@ -21,16 +21,27 @@ from .utils import categorize_transactions
 logger = logging.getLogger(__name__)
 
 
-
 class CustomPagination(PageNumberPagination):
     page_size = 20  # Set the page size to 20
-    page_size_query_param = 'page_size'  # Optional: Allows the client to change page size
-    max_page_size = 100  # Optional: Limit the maximum page size
+    page_size_query_param = 'page_size'  
+    max_page_size = 100  
+
+from datetime import datetime
 
 @api_view(['GET'])
 def get_statements(request):
     user = request.user
+    category = request.query_params.get('category', '')
+    month = request.query_params.get('month', '')
+    
+    # Filter by category if provided
     statements = CSVData.objects.filter(user=user)
+    if category:
+        statements = statements.filter(category=category)
+    
+    # Filter by month if provided
+    if month:
+        statements = statements.filter(transactionDate__month=month)
     
     # Initialize pagination
     paginator = CustomPagination()
@@ -41,6 +52,13 @@ def get_statements(request):
     
     # Return paginated response
     return paginator.get_paginated_response(serializer.data)
+
+
+@api_view(['GET'])
+def get_categories(request):
+    user = request.user
+    categories = CSVData.objects.filter(user=user).values_list('category', flat=True).distinct()
+    return Response({"categories": list(categories)})
 
 
 class CSVUploadPreviewView(APIView):
