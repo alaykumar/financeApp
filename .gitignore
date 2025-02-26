@@ -1,0 +1,31 @@
+# Django settings
+*.pyc
+__pycache__/
+db.sqlite3
+.env  # Your environment variables file
+.venv/  # Virtual environment directory (if you're using one)
+env/
+venv/
+.pytest_cache/
+*.log
+.coverage
+.tox/
+.nox/
+.hypothesis/
+.mypy_cache/
+.coverage
+.idea/
+
+# React build output
+node_modules/
+build/
+.env  # For React-specific environment variables if used
+.npm/
+.cache/
+.storybook/
+.yarn/
+.vscode/
+
+# General system files
+.DS_Store  # macOS system file
+Thumbs.db  # Windows system file
