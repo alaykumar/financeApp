@@ -97,14 +97,7 @@ DATABASES = {
         'HOST': config('DB_HOST'),
         'PORT': config('DB_PORT'),
     }
-    #'default': {
-    #    'ENGINE': 'django.db.backends.postgresql_psycopg2',
-    #    'NAME': 'financeApp',
-    #    'USER': 'postgres',
-    #    'PASSWORD': 'admin',
-    #    'HOST': 'localhost',
-    #    'PORT': '5432',
-    #}
+    
 }
 
 
