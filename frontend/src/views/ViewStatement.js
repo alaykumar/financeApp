@@ -58,12 +58,12 @@ function ViewStatements() {
 
     return (
         <div>
-            <div className="container-fluid" style={{ paddingTop: '100px' }}>
+            <div className="container-fluid" style={{ paddingTop: '75px' }}>
                 <div className="row">
-                    <main role="main" className="col-md-9 ml-sm-auto col-lg-10 pt-3">
-                        <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
+                    <main role="main" className="col-md-9 col-lg-10 container text-center">
+                        {/* <div className="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pb-2 mb-3 border-bottom">
                             <h1 className="h2">View Statements</h1>
-                        </div>
+                        </div> */}
                         <h2>Statement Data</h2>
 
                         {/* Filter Section */}

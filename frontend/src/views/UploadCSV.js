@@ -130,9 +130,9 @@ function UploadCSV() {
 
   return (
     <div>
-      <div className="container-fluid" style={{ paddingTop: '100px' }}>
+      <div className="container-fluid" style={{ paddingTop: '75px' }}>
         <div className="row">
-          <main role="main" className="col-md-9 ml-sm-auto col-lg-10 pt-3 px-4">
+          <main role="main" className="col-md-9 col-lg-10 container text-center"> 
             <h1 className="h2">Upload CSV</h1>
             {res && <div className="alert alert-success"><strong>{res}</strong></div>}
 
