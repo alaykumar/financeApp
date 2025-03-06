@@ -4,36 +4,42 @@ import logging
 
 from django.db import transaction
 
-from rest_framework import status, generics
+from rest_framework import status
 from rest_framework.decorators import api_view
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.exceptions import ValidationError
-from rest_framework.pagination import PageNumberPagination
 
 from .serializers import CSVDataSerializer, CategorySerializer
 from .models import CSVData, Category, Keyword
 from .keywordUtils import generate_multiple_keywords
 from .utils import categorize_transactions
+from .helpers.filter_statements import filter_statements
+from .helpers.custom_pagination import CustomPagination
+from .helpers.process_td_statements import process_td_statement
+from .helpers.process_amex_statements import process_amex_statement
 
 
 logger = logging.getLogger(__name__)
 
-
-class CustomPagination(PageNumberPagination):
-    page_size = 20  # Set the page size to 20
-    page_size_query_param = 'page_size'  
-    max_page_size = 100  
-
-from datetime import datetime
 
 @api_view(['GET'])
 def get_statements(request):
     user = request.user
     category = request.query_params.get('category', '')
     month = request.query_params.get('month', '')
+
+    statements = filter_statements(user, category, month)
+    paginator = CustomPagination()
+    result_page = paginator.paginate_queryset(statements, request)
     
+    # Serialize the paginated data
+    serializer = CSVDataSerializer(result_page, many=True)
+    
+    # Return paginated response
+    return paginator.get_paginated_response(serializer.data)
+    
+    '''
     # Filter by category if provided
     statements = CSVData.objects.filter(user=user)
     if category:
@@ -52,6 +58,7 @@ def get_statements(request):
     
     # Return paginated response
     return paginator.get_paginated_response(serializer.data)
+    '''
 
 
 @api_view(['GET'])
@@ -76,6 +83,7 @@ class CSVUploadPreviewView(APIView):
             csv_data = pd.read_csv(csv_file)
             csv_data = csv_data.where(pd.notnull(csv_data), 0.0)
 
+            '''
             preview_data = []
 
             if card_org == 'TD':
@@ -133,7 +141,16 @@ class CSVUploadPreviewView(APIView):
                         "suggestedCategory": category,
                         "allCategories": list(all_categories),
                     })
+            '''        
 
+            if card_org == 'TD':
+                preview_data = process_td_statement(csv_data, user)
+            elif card_org == 'AMEX':
+                preview_data = process_amex_statement(csv_data, user)
+            else:
+                return Response({"error": "Unsupported card organization."}, status=status.HTTP_400_BAD_REQUEST)
+            
+            
             return Response({"preview": preview_data}, status=status.HTTP_200_OK)
 
         except Exception as e:
