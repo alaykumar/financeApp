@@ -27,6 +27,6 @@ build/
 # General system files
 .DS_Store 
 
-dockerfile
-.yml
+Dockerfile
+docker-compose.yml
 
