@@ -27,3 +27,6 @@ build/
 # General system files
 .DS_Store 
 
+dockerfile
+.yml
+
