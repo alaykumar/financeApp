@@ -12,11 +12,6 @@ function Registerpage() {
 
   const {registerUser} = useContext(AuthContext)
 
-  console.log(email);
-  console.log(username);
-  console.log(password);
-  console.log(password2);
-
 
   const handleSubmit = async e => {
     e.preventDefault()

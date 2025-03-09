@@ -134,7 +134,6 @@ function ViewStatements() {
                                         <td>{item.category}</td>
                                     </tr>
                                 ))}
-                                {console.log(data)}
                             </tbody>
                         </table>
 
