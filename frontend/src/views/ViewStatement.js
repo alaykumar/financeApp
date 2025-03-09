@@ -52,9 +52,12 @@ function ViewStatements() {
         fetchStatements(currentPage, selectedCategory, selectedMonth); // Fetch data when the component mounts
     }, [currentPage, selectedCategory, selectedMonth]);
 
+
     const handlePageChange = (page) => {
         setCurrentPage(page);
     };
+
+
 
     return (
         <div>
@@ -72,7 +75,10 @@ function ViewStatements() {
                             <select
                                 className="form-select mb-3"
                                 value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
+                                onChange={(e) => {
+                                    setSelectedCategory(e.target.value);
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <option value="">All Categories</option>
                                 {categories.map((category, index) => (
@@ -86,7 +92,10 @@ function ViewStatements() {
                             <select
                                 className="form-select mb-3"
                                 value={selectedMonth}
-                                onChange={(e) => setSelectedMonth(e.target.value)}
+                                onChange={(e) => {
+                                    setSelectedMonth(e.target.value);
+                                    setCurrentPage(1);
+                                }}
                             >
                                 <option value="">All Months</option>
                                 <option value="01">January</option>
@@ -125,6 +134,7 @@ function ViewStatements() {
                                         <td>{item.category}</td>
                                     </tr>
                                 ))}
+                                {console.log(data)}
                             </tbody>
                         </table>
 
