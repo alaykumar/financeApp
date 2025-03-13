@@ -11,7 +11,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from .serializers import CSVDataSerializer, CategorySerializer
-from .models import CSVData, Category, Keyword
+from .models import CSVData, Category, Keyword, Card
 from .keywordUtils import generate_multiple_keywords
 from .utils import categorize_transactions
 from .helpers.filter_statements import filter_statements
@@ -39,26 +39,6 @@ def get_statements(request):
     # Return paginated response
     return paginator.get_paginated_response(serializer.data)
     
-    '''
-    # Filter by category if provided
-    statements = CSVData.objects.filter(user=user)
-    if category:
-        statements = statements.filter(category=category)
-    
-    # Filter by month if provided
-    if month:
-        statements = statements.filter(transactionDate__month=month)
-    
-    # Initialize pagination
-    paginator = CustomPagination()
-    result_page = paginator.paginate_queryset(statements, request)
-    
-    # Serialize the paginated data
-    serializer = CSVDataSerializer(result_page, many=True)
-    
-    # Return paginated response
-    return paginator.get_paginated_response(serializer.data)
-    '''
 
 
 @api_view(['GET'])
@@ -83,66 +63,6 @@ class CSVUploadPreviewView(APIView):
             csv_data = pd.read_csv(csv_file)
             csv_data = csv_data.where(pd.notnull(csv_data), 0.0)
 
-            '''
-            preview_data = []
-
-            if card_org == 'TD':
-                # Process TD statement
-                for transaction_date in range(csv_data.iloc[:, 0].size):
-                    d = datetime.strptime(csv_data.iloc[transaction_date, 0], '%m/%d/%Y')
-                    csv_data.iloc[transaction_date, 0] = d.strftime('%Y-%m-%d')
-
-                for record in csv_data.to_dict(orient="records"):
-                    transaction_date = record[csv_data.columns[0]]
-                    vendor_name = record[csv_data.columns[1]]
-                    debit = record[csv_data.columns[2]]
-                    credit = record[csv_data.columns[3]]
-
-                    # Call the categorize_transactions function with the user
-                    category = categorize_transactions(vendor_name, user)
-                    all_categories = Category.objects.values_list('name', flat=True)
-
-                    preview_data.append({
-                        "transactionDate": transaction_date,
-                        "vendorName": vendor_name,
-                        "debit": debit,
-                        "credit": credit,
-                        "suggestedCategory": category,
-                        "allCategories": list(all_categories),
-                    })
-
-            elif card_org == 'AMEX':
-                # Process AMEX statement
-                for transaction_date in range(csv_data.iloc[:, 0].size):
-                    d = datetime.strptime(csv_data.iloc[transaction_date, 0], '%d %b %Y')
-                    csv_data.iloc[transaction_date, 0] = d.strftime('%Y-%m-%d')
-
-                for record in csv_data.to_dict(orient="records"):
-                    transaction_date = record['Date']
-                    vendor_name = record['Description']
-                    amount = record['Amount']
-
-                    if amount >= 0:
-                        debit = amount
-                        credit = 0.0
-                    else:
-                        credit = abs(amount)
-                        debit = 0.0
-
-                    # Call the categorize_transactions function with the user
-                    category = categorize_transactions(vendor_name, user)
-                    all_categories = Category.objects.values_list('name', flat=True)
-
-                    preview_data.append({
-                        "transactionDate": transaction_date,
-                        "vendorName": vendor_name,
-                        "debit": debit,
-                        "credit": credit,
-                        "suggestedCategory": category,
-                        "allCategories": list(all_categories),
-                    })
-            '''        
-
             if card_org == 'TD':
                 preview_data = process_td_statement(csv_data, user)
             elif card_org == 'AMEX':
@@ -161,7 +81,9 @@ class CSVUploadPreviewView(APIView):
 def save_statements(request):
     user = request.user
     data = request.data.get('data', [])
-
+    card_org = request.data.get('cardOrg', '').strip()
+    card_type = request.data.get('cardType', '').strip()
+    
     if not data:
         logger.error("No data provided in the request.")
         return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
@@ -173,6 +95,12 @@ def save_statements(request):
     try:
         with transaction.atomic():  # Ensure atomicity of all DB operations
             logger.info("Starting transaction save process.")
+
+            card = None
+            if card_org and card_type:
+                card, _ = Card.objects.get_or_create(user=user, card_org=card_org, card_type=card_type)
+                logger.info(f"Card set: {card_org} ({card_type})")
+
             for row in data:
                 transaction_date = row.get('transactionDate') 
                 vendor_name = row.get('vendorName')
@@ -234,6 +162,7 @@ def save_statements(request):
                     debit=debit,
                     credit=credit,
                     category=category.name,
+                    card=card
                 ).exists()
 
                 if not exists:
@@ -243,7 +172,8 @@ def save_statements(request):
                         vendorName=vendor_name,
                         debit=debit,
                         credit=credit,
-                        category=category.name  # Ensure the category is correctly set
+                        category=category.name,
+                        card=card  
                     ))
                     logger.info(f"New transaction added: {vendor_name}, {parsed_date}, {category_name}")
 

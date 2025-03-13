@@ -6,6 +6,8 @@ function UploadCSV() {
   // State variables for file, selected bank, CSV data, categories, and response message
   const [file, setFile] = useState(null);
   const [cardOrg, setCardOrg] = useState('');
+  const [cardType, setCardType] = useState('')
+  const [customCardType, setCustomeCardType] = useState('')
   const [csvData, setCsvData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [res, setRes] = useState('');
@@ -58,9 +60,11 @@ function UploadCSV() {
       return;
     }
 
+    const selectedCardType = cardType === "Other" ? customCardType : cardType;
     const formData = new FormData();
     formData.append('file', file);
     formData.append('cardOrg', cardOrg);
+    formData.append('cardType', selectedCardType);
 
     try {
       const response = await api.post('dataUpload/upload-csv-preview/', formData, {
@@ -68,7 +72,6 @@ function UploadCSV() {
           'Content-Type': 'multipart/form-data',
         },
       });
-
       // Store preview data received from backend
       setCsvData(response.data.preview || []);
       setRes('');
@@ -90,27 +93,6 @@ function UploadCSV() {
     setCsvData(updatedData);
   };
 
-  // Handle changes to custom category input field
-  const handleCustomCategoryChange = (index, value) => {
-    const updatedData = [...csvData];
-    updatedData[index].customCategory = value;
-    setCsvData(updatedData);
-  };
-
-  // Add custom category to category list and assign it to the transaction
-  const handleAddCustomCategory = (index) => {
-    const updatedData = [...csvData];
-    const customCategory = updatedData[index].customCategory?.trim();
-
-    if (customCategory && !categories.some((cat) => cat.name === customCategory)) {
-      setCategories((prevCategories) => [...prevCategories, { id: `custom-${Date.now()}`, name: customCategory }]);
-    }
-
-    updatedData[index].category = customCategory;
-    updatedData[index].customCategory = ''; // Clear input field
-    setCsvData(updatedData);
-  };
-
   // Save categorized transactions to backend
   const handleSave = async () => {
     // Remove unnecessary fields before saving
@@ -119,7 +101,11 @@ function UploadCSV() {
     console.log('Cleaned data being sent to backend (formatted):', JSON.stringify(cleanedData, null, 2));
 
     try {
-      const response = await api.post('dataUpload/save-statements/', { data: cleanedData });
+      const response = await api.post('dataUpload/save-statements/', { 
+        data: cleanedData,
+        cardOrg,
+        cardType 
+      });
       setRes(response.data.message || 'Statements saved successfully!');
       setCsvData([]);
     } catch (error) {
@@ -137,13 +123,37 @@ function UploadCSV() {
             {res && <div className="alert alert-success"><strong>{res}</strong></div>}
 
             {/* Select bank and upload file */}
-            <label htmlFor="cardOrg">Select Bank: </label>
-            <select id="cardOrg" value={cardOrg} onChange={handleBankChange}>
-              <option value="">--Select Bank--</option>
-              <option value="RBC">RBC</option>
-              <option value="TD">TD</option>
-              <option value="AMEX">AMEX</option>
+            <label htmlFor="cardOrg">Card Organization</label>
+            <input
+              id="cardOrg"
+              type="text"
+              placeholder="Enter Bank or Card Org"
+              value={cardOrg}
+              onChange={(e) => setCardOrg(e.target.value)}
+            />
+
+            {/* Card Type Dropdown and Input */}
+            <label htmlFor='cardType'>Card Type: </label>
+            <select
+              id="cardType"
+              value={cardType}
+              onChange={(e) => setCardType(e.target.value)}
+            >
+              <option value="">--Select Card Type--</option>
+              <option value="Visa">Visa</option>
+              <option value="MasterCard">MasterCard</option>
+              <option value="Other">Other</option>
             </select>
+
+            {cardType === "Other" && (
+              <input
+                type='text'
+                placeholder='Entter Card Type'
+                value={customCardType}
+                onChange={(e) => setCustomeCardType(e.target.value)}
+              />
+            )}
+           
             <input type="file" accept=".csv" onChange={handleFileChange} />
             <button className="btn btn-primary" onClick={handleUpload}>Upload</button>
 

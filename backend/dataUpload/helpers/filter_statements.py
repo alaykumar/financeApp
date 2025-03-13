@@ -6,4 +6,4 @@ def filter_statements(user, category=None, month=None):
         statements = statements.filter(category=category)
     if month:
         statements = statements.filter(transactionDate__month=month)
-    return statements
+    return statements.order_by("transactionDate")

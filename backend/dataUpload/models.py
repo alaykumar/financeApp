@@ -1,7 +1,17 @@
 from django.db import models
 from django.conf import settings
+from django.core.exceptions import ValidationError
 
 # Create your models here.
+
+class Card(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    card_type = models.CharField(max_length=50)
+    card_org = models.CharField(max_length=100)
+
+    def __str__(self):
+        return f"{self.card_org} ({self.card_type})"
+
 class CSVData(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     transactionDate = models.DateField()
@@ -11,6 +21,7 @@ class CSVData(models.Model):
     balance = models.DecimalField(default=0, max_digits=7, decimal_places=2)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     category = models.CharField(max_length=255, default="Uncategorized")
+    card = models.ForeignKey("Card", on_delete=models.SET_NULL, null=True)
 
     # Relate category to CSVData using ForeignKey and include the user
     #category = models.ForeignKey('Category', on_delete=models.SET_NULL, null=True, blank=True)
@@ -46,36 +57,3 @@ class Keyword(models.Model):
     def __str__(self):
         return self.words
 
-
-
-"""
-class Keyword(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, default="")  # Ensure this field is required
-    category = models.ForeignKey(Category, related_name="keywords", on_delete=models.CASCADE, null=False)  # Ensure this field is required
-
-    words = models.TextField(default='')
-    vendor_name = models.CharField(max_length=255, null=False, default="unknown_vendor")  
-
-    #class Meta:
-    #    unique_together = ("user", "vendor_name", "words")
-
-    def __str__(self):
-        return self.words
-
-"""
-
-"""
-class Keyword(models.Model):
-    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=False, default='')  # Ensure this field is required
-    category = models.ForeignKey(Category, related_name='keywords', on_delete=models.CASCADE, null=False)  # Ensure this field is required
-    
-    word = models.CharField(max_length=255, null=False, default='')  # Default to an empty string
-    
-
-    class Meta:
-        unique_together = ('user', 'word', 'category')
-
-    def __str__(self):
-        return self.word
-
-"""
