@@ -1,7 +1,8 @@
 from datetime import datetime
 
 from ..models import Category
-from ..utils import categorize_transactions
+#from ..utils import categorize_transactions
+from ..generate_keywords import categorize_transactions
 
 
 def process_td_statement(csv_data, user):

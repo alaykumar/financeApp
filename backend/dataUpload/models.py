@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.contrib.postgres.fields import ArrayField
 
 # Create your models here.
 
@@ -53,6 +54,20 @@ class Keyword(models.Model):
 
     #class Meta:
     #    unique_together = ('user', 'words')
+
+    def __str__(self):
+        return self.words
+    
+
+class Keywords2(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    #category = models.ForeignKey('Category', on_delete=models.CASCADE)
+    category = models.ForeignKey(Category, related_name="keywords2", on_delete=models.CASCADE)
+    words = ArrayField(models.CharField(max_length=100), default=list)
+    vendor_name = models.CharField(max_length=255, null=False, default="unknown_vendor")
+
+    class Meta:
+        unique_together = ('user', 'vendor_name')
 
     def __str__(self):
         return self.words

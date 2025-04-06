@@ -22,7 +22,7 @@ def generate_multiple_keywords(vendor_name):
 
 
 """
-
+"""
 import re
 import nltk
 
@@ -44,3 +44,37 @@ def generate_multiple_keywords(vendor_name):
     filtered_words = [word for word in words if word not in STOP_WORDS and len(word) > 2]
 
     return filtered_words if filtered_words else ["unknown"]
+"""
+
+import spacy
+import pandas as pd
+import re
+from spacy.tokenizer import Tokenizer
+
+nlp = spacy.load("en_core_web_sm")
+
+def custom_tokenizer(nlp):
+    infix_re = re.compile(r'''[.\,\?\:\;\!\&\/]''')
+    return Tokenizer(nlp.vocab, infix_finditer=infix_re.finditer)
+
+nlp.tokenizer = custom_tokenizer(nlp)
+
+def clean_vendor_name(vendor_name):
+    if pd.isna(vendor_name):
+        return ""
+    vendor_name = vendor_name.lower()
+    vendor_name = re.sub(r'\.(com|net|org|biz|info|io|co|us|ca|uk|in)(/.*)?$', '', vendor_name)
+    vendor_name = re.sub(r'[^a-zA-Z0-9&\s]', ' ', vendor_name)
+    return vendor_name.strip()
+
+
+def categorize_keyword(vendor_name):
+    cleaned_name = clean_vendor_name(vendor_name)
+    doc = nlp(cleaned_name)
+
+    keywords = [
+        token.lemma_ for token in doc
+        if token.is_alpha or "&" in token.text
+    ]
+
+    return keywords

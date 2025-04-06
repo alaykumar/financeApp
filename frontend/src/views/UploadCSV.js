@@ -3,26 +3,21 @@ import useAxios from '../utils/useAxios';
 import { jwtDecode } from 'jwt-decode';
 
 function UploadCSV() {
-  // State variables for file, selected bank, CSV data, categories, and response message
+  // State variables
   const [file, setFile] = useState(null);
   const [cardOrg, setCardOrg] = useState('');
-  const [cardType, setCardType] = useState('')
-  const [customCardType, setCustomeCardType] = useState('')
+  const [cardType, setCardType] = useState('');
+  const [customCardType, setCustomeCardType] = useState('');
   const [csvData, setCsvData] = useState([]);
   const [categories, setCategories] = useState([]);
   const [res, setRes] = useState('');
   const api = useAxios();
 
-  // Retrieve authentication token from local storage
+  // Retrieve user ID from token
   const token = localStorage.getItem('authTokens');
-  let user_id;
-  if (token) {
-    // Decode JWT token to extract user ID
-    const decode = jwtDecode(token);
-    user_id = decode.user_id;
-  }
+  const user_id = token ? jwtDecode(token).user_id : null;
 
-  // Function to fetch categories from backend
+  // Fetch categories
   const fetchCategories = async () => {
     try {
       const response = await api.get('/dataUpload/categories_list/');
@@ -38,22 +33,18 @@ function UploadCSV() {
     }
   };
 
-  // Fetch categories when component mounts
   useEffect(() => {
     fetchCategories();
   }, []);
 
-  // Handle file input change
-  const handleFileChange = (event) => {
-    setFile(event.target.files[0]);
+  const handleFileChange = (event) => setFile(event.target.files[0]);
+  const handleBankChange = (event) => setCardOrg(event.target.value);
+  const handleCardTypeChange = (event) => {
+    setCardType(event.target.value);
+    if (event.target.value !== 'Other') setCustomeCardType('');
   };
+  const handleCustomCardTypeChange = (event) => setCustomeCardType(event.target.value);
 
-  // Handle bank selection change
-  const handleBankChange = (event) => {
-    setCardOrg(event.target.value);
-  };
-
-  // Upload the selected CSV file
   const handleUpload = async () => {
     if (!file || !cardOrg) {
       setRes('Please select a bank and upload a file.');
@@ -68,11 +59,8 @@ function UploadCSV() {
 
     try {
       const response = await api.post('dataUpload/upload-csv-preview/', formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+        headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // Store preview data received from backend
       setCsvData(response.data.preview || []);
       setRes('');
     } catch (error) {
@@ -82,29 +70,59 @@ function UploadCSV() {
     }
   };
 
-  // Handle updates to CSV data (category selection)
   const handleDataChange = (index, key, value) => {
     const updatedData = [...csvData];
-    updatedData[index] = {
-      ...updatedData[index],
-      [key]: value,
-      customCategory: key === 'category' && value === 'Other' ? '' : undefined,
-    };
+    updatedData[index] = { ...updatedData[index], [key]: value };
     setCsvData(updatedData);
   };
 
-  // Save categorized transactions to backend
+  const handleCategorySelect = (index, event) => {
+    const selectedValue = event.target.value;
+    const updatedData = [...csvData];
+    updatedData[index].category = selectedValue;
+    if (selectedValue !== 'Other') {
+      updatedData[index].newCategoryInput = ''; // Clear input if 'Other' is not selected
+    }
+    setCsvData(updatedData);
+  };
+
+  const handleNewCategoryInputChange = (index, event) => {
+    const updatedData = [...csvData];
+    updatedData[index].newCategoryInput = event.target.value;
+    setCsvData(updatedData);
+  };
+
+  const handleAddNewCategoryForRow = (index) => {
+    const categoryToAdd = csvData[index]?.newCategoryInput?.trim();
+    if (categoryToAdd && !categories.some(cat => cat.name === categoryToAdd)) {
+      // Create a temporary category object (assuming your category objects have an 'id' and 'name')
+      const newCategoryObject = { id: `temp-${Date.now()}`, name: categoryToAdd };
+      // Update the categories state with the new category
+      setCategories(prevCategories => [...prevCategories, newCategoryObject]);
+      // Update the category for the current row in csvData
+      const updatedData = [...csvData];
+      updatedData[index].category = categoryToAdd;
+      updatedData[index].newCategoryInput = '';
+      setCsvData(updatedData);
+    } else if (categories.some(cat => cat.name === categoryToAdd)) {
+      // If the category already exists, just update the row's category
+      const updatedData = [...csvData];
+      updatedData[index].category = categoryToAdd;
+      updatedData[index].newCategoryInput = '';
+      setCsvData(updatedData);
+    }
+  };
+
   const handleSave = async () => {
-    // Remove unnecessary fields before saving
-    const cleanedData = csvData.map(({ suggestedCategory, allCategories, ...rest }) => rest);
+    const cleanedData = csvData.map(({ suggestedCategory, allCategories, newCategoryInput, ...rest }) => rest);
 
     console.log('Cleaned data being sent to backend (formatted):', JSON.stringify(cleanedData, null, 2));
 
     try {
-      const response = await api.post('dataUpload/save-statements/', { 
+      const response = await api.post('dataUpload/save-statements/', {
         data: cleanedData,
         cardOrg,
-        cardType 
+        cardType,
       });
       setRes(response.data.message || 'Statements saved successfully!');
       setCsvData([]);
@@ -118,26 +136,24 @@ function UploadCSV() {
     <div>
       <div className="container-fluid" style={{ paddingTop: '75px' }}>
         <div className="row">
-          <main role="main" className="col-md-9 col-lg-10 container text-center"> 
+          <main role="main" className="col-md-9 col-lg-10 container text-center">
             <h1 className="h2">Upload CSV</h1>
             {res && <div className="alert alert-success"><strong>{res}</strong></div>}
 
-            {/* Select bank and upload file */}
             <label htmlFor="cardOrg">Card Organization</label>
             <input
               id="cardOrg"
               type="text"
               placeholder="Enter Bank or Card Org"
               value={cardOrg}
-              onChange={(e) => setCardOrg(e.target.value)}
+              onChange={handleBankChange}
             />
 
-            {/* Card Type Dropdown and Input */}
             <label htmlFor='cardType'>Card Type: </label>
             <select
               id="cardType"
               value={cardType}
-              onChange={(e) => setCardType(e.target.value)}
+              onChange={handleCardTypeChange}
             >
               <option value="">--Select Card Type--</option>
               <option value="Visa">Visa</option>
@@ -148,16 +164,15 @@ function UploadCSV() {
             {cardType === "Other" && (
               <input
                 type='text'
-                placeholder='Entter Card Type'
+                placeholder='Enter Card Type'
                 value={customCardType}
-                onChange={(e) => setCustomeCardType(e.target.value)}
+                onChange={handleCustomCardTypeChange}
               />
             )}
-           
+
             <input type="file" accept=".csv" onChange={handleFileChange} />
             <button className="btn btn-primary" onClick={handleUpload}>Upload</button>
 
-            {/* Display uploaded CSV data for review */}
             {csvData.length > 0 && (
               <div>
                 <h2>Review and Categorize</h2>
@@ -181,21 +196,35 @@ function UploadCSV() {
                         <td>
                           <select
                             value={item.category || ''}
-                            onChange={(e) => handleDataChange(index, 'category', e.target.value)}
+                            onChange={(e) => handleCategorySelect(index, e)}
                           >
                             <option value="">{item.suggestedCategory || '--Select--'}</option>
-
-                            {/* Sort categories alphabetically by name */}
                             {categories
-                              .sort((a, b) => a.name.localeCompare(b.name)) // Sorting alphabetically
-                              .map((cat, i) => (
-                                <option key={cat.id || `category-${i}`} value={cat.name}>
+                              .sort((a, b) => a.name.localeCompare(b.name))
+                              .map((cat) => (
+                                <option key={cat.id} value={cat.name}>
                                   {cat.name}
                                 </option>
                               ))}
-
                             <option value="Other">Other</option>
                           </select>
+                          {item.category === 'Other' && (
+                            <>
+                              <input
+                                type="text"
+                                placeholder="New Category"
+                                value={item.newCategoryInput || ''}
+                                onChange={(e) => handleNewCategoryInputChange(index, e)}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-sm btn-outline-secondary"
+                                onClick={() => handleAddNewCategoryForRow(index)}
+                              >
+                                Add
+                              </button>
+                            </>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -212,6 +241,3 @@ function UploadCSV() {
 }
 
 export default UploadCSV;
-
-
-

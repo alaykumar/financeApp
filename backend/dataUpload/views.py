@@ -2,7 +2,7 @@ import pandas as pd
 from datetime import datetime
 import logging
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -11,8 +11,8 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from .serializers import CSVDataSerializer, CategorySerializer
-from .models import CSVData, Category, Keyword, Card
-from .keywordUtils import generate_multiple_keywords
+from .models import CSVData, Category, Keyword, Card, Keywords2
+from .keywordUtils import categorize_keyword#, generate_multiple_keywords
 from .utils import categorize_transactions
 from .helpers.filter_statements import filter_statements
 from .helpers.custom_pagination import CustomPagination
@@ -78,7 +78,128 @@ class CSVUploadPreviewView(APIView):
 
 
 @api_view(['POST'])
+
 def save_statements(request):
+    user = request.user
+    data = request.data.get('data', [])
+    card_org = request.data.get('cardOrg', '').strip()
+    card_type = request.data.get('cardType', '').strip()
+    
+    if not data:
+        logger.error("No data provided in the request.")
+        return Response({"error": "No data provided."}, status=status.HTTP_400_BAD_REQUEST)
+
+    new_categories = [] 
+    new_records = [] 
+    new_keywords = []  # Collecting new keywords to avoid duplicates
+
+    try:
+        with transaction.atomic():  # Ensure atomicity of all DB operations
+            logger.info("Starting transaction save process.")
+
+            card = None
+            if card_org and card_type:
+                card, _ = Card.objects.get_or_create(user=user, card_org=card_org, card_type=card_type)
+                logger.info(f"Card set: {card_org} ({card_type})")
+
+            # Get all existing vendor names for this user to prevent duplicates
+            existing_vendor_names = set(
+                Keywords2.objects.filter(user=user).values_list('vendor_name', flat=True)
+            )
+
+            for row in data:
+                transaction_date = row.get('transactionDate') 
+                vendor_name = row.get('vendorName')
+                debit = row.get('debit', 0.0)
+                credit = row.get('credit', 0.0)
+                category_name = row.get('category', 'Uncategorized')  # Make sure this is set from frontend
+
+                if not vendor_name or not transaction_date:
+                    logger.error(f"Missing vendor name or transaction date for row: {row}")
+                    return Response({"error": "Transaction date and vendor name are required."},
+                                    status=status.HTTP_400_BAD_REQUEST)
+
+                try:
+                    parsed_date = datetime.strptime(transaction_date, '%Y-%m-%d').date()
+                except ValueError:
+                    logger.error(f"Invalid date format for transaction {transaction_date}.")
+                    return Response({"error": f"Invalid date format: {transaction_date}. Use 'YYYY-MM-DD'."},
+                                     status=status.HTTP_400_BAD_REQUEST)
+
+                logger.info(f"Processing transaction: {vendor_name} on {parsed_date}")
+
+                # Ensure the category is not set to "Uncategorized" unless it's really uncategorized
+                if category_name == "Uncategorized":
+                    logger.info(f"Categorizing transaction with vendor name: {vendor_name}")
+                    category_name = categorize_transactions(vendor_name, user)
+
+                logger.info(f"Assigned category: {category_name}")
+
+                # Create or retrieve the category
+                category, created = Category.objects.get_or_create(name=category_name, user=user)
+                if created:
+                    new_categories.append(category)
+                    logger.info(f"New category created: {category_name}")
+
+                # Generate keywords for the vendor name
+                keywords = categorize_keyword(vendor_name)
+
+                # Ensure no duplicates for user_id and vendor_name in Keywords2
+                if vendor_name not in existing_vendor_names:
+                    new_keywords.append(Keywords2(
+                        user=user,
+                        category=category,
+                        words=keywords,  # Store the list of keywords (this assumes your 'words' field supports list/JSON)
+                        vendor_name=vendor_name
+                    ))
+                    existing_vendor_names.add(vendor_name)  # Add to the set to avoid future duplicates
+
+                # Check if the transaction already exists to avoid duplicates
+                exists = CSVData.objects.filter(
+                    user=user,
+                    transactionDate=parsed_date,
+                    vendorName=vendor_name,
+                    debit=debit,
+                    credit=credit,
+                    category=category.name,
+                    card=card
+                ).exists()
+
+                if not exists:
+                    new_records.append(CSVData(
+                        user=user,
+                        transactionDate=parsed_date,
+                        vendorName=vendor_name,
+                        debit=debit,
+                        credit=credit,
+                        category=category.name,
+                        card=card  
+                    ))
+                    logger.info(f"New transaction added: {vendor_name}, {parsed_date}, {category_name}")
+
+            # Bulk create new keywords only if there are any
+            if new_keywords:
+                Keywords2.objects.bulk_create(new_keywords)
+                logger.info(f"Bulk created {len(new_keywords)} new keywords.")
+
+            # Bulk create CSVData entries
+            if new_records:
+                CSVData.objects.bulk_create(new_records)
+                logger.info(f"Bulk created {len(new_records)} transaction records.")
+
+        logger.info("Transaction save process completed successfully.")
+        return Response({"message": "Statements, categories, and keywords saved successfully!"},
+                         status=status.HTTP_201_CREATED)
+
+    except IntegrityError as e:
+        logger.error(f"Integrity error while saving transactions: {str(e)}")
+        return Response({"error": "Integrity error while saving data"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        logger.error(f"Error occurred while saving transactions: {str(e)}")
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+"""
     user = request.user
     data = request.data.get('data', [])
     card_org = request.data.get('cardOrg', '').strip()
@@ -137,6 +258,7 @@ def save_statements(request):
 
                 # Generate keywords for the vendor name
                 keywords = generate_multiple_keywords(vendor_name)
+    
 
                 # Check if the keyword already exists for the user and only add unique ones
                 existing_keywords = Keyword.objects.filter(user=user).values_list('words', flat=True)
@@ -148,6 +270,7 @@ def save_statements(request):
                         vendor_name=vendor_name
                     )
                     for keyword in keywords if keyword not in existing_keywords
+                   
                 ]
                 
                 # Add the new keywords to the list
@@ -194,7 +317,7 @@ def save_statements(request):
     except Exception as e:
         logger.error(f"Error occurred while saving transactions: {str(e)}")
         return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
+"""
 
 class CategoryView(APIView):
     permission_classes = [IsAuthenticated]
